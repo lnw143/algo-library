@@ -29,18 +29,18 @@ public:
 	static_assert(4<=width&&(width&(width-1))==0, "bit width must be 2^x (x>=2)");
 
 private:
-	int n,m,sgn;
+	int n,sgn;
 	iterator ptr;
 
 public:
 
 	// Member Function
 
-	iterator begin() const {
+	const_iterator begin() const {
 		return ptr;
 	}
 
-	iterator end() const {
+	const_iterator end() const {
 		return ptr+n;
 	}
 
@@ -48,22 +48,13 @@ public:
 		return n;
 	}
 
-	int capacity() const {
-		return m;
-	}
-
 	const intType& operator[](int x) const {
 		return ptr[x];
 	}
 
-	void resize(int m_) {
-		delete[] ptr;
-		m=m_;
-		ptr=new intType[m+1];
-	}
-
 	std::string to_string(_Base base) const {
 		std::string result="";
+		if(sgn==-1) result+='-';
 		if(base==BIN) {
 			for(int i=n-1,exi=0; i>=0; --i)
 				for(int j=width-1; j>=0; --j)
@@ -89,26 +80,30 @@ public:
 					if(exi|=(ptr[i]>>j)&0xF)
 						result+="0123456789ABCDEF"[(ptr[i]>>j)&0xF];
 		} else
-			throw "Not Supported Base!";
+			throw std::invalid_argument("Not Supported Base!");
 		return result.empty()?"0":result;
 	}
 
 	// Construct Function
 
-	bigInt(int n_,int sgn_,const_iterator ptr_):n(n_),m(n_),sgn(sgn_),ptr(nullptr) {
-		while(n>1&&ptr_[n-1]==0) --n;
-		m=n;
-		ptr=new intType[m+1];
-		memcpy(ptr,ptr_,sizeof(intType)*n);
-		if(n==1&&ptr[0]==0) sgn=0;
+	bigInt(int n_,int sgn_,iterator ptr_):n(n_),sgn(sgn_),ptr(ptr_) {
+		if(ptr==nullptr) {
+			n=1;
+			sgn=0;
+			ptr=new intType[2];
+			ptr[0]=0;
+		} else {
+			while(n>1&&ptr[n-1]==0) --n;
+			if(n==1&&ptr[0]==0) sgn=0;
+		}
 	}
 
-	bigInt():sgn(0),n(1),m(1) {
+	bigInt():n(1),sgn(0) {
 		ptr=new intType[2];
 		ptr[0]=0;
 	}
 
-	bigInt(const char *s,int len,_Base base):n(1),m(1),sgn(0),ptr(nullptr) {
+	bigInt(const char *s,int len,_Base base):n(1),sgn(0),ptr(nullptr) {
 		if(len==0) {
 			ptr=new intType[2];
 			ptr[0]=0;
@@ -118,13 +113,12 @@ public:
 				if(*s=='+') ++s,--len;
 				sgn=1;
 			}
-			m=len/width+1;
-			ptr=new intType[m+1];
+			ptr=new intType[len/width+2];
 			iterator cur=ptr;
 			for(int i=len; i>=width; i-=width) {
 				intType x=0;
 				for(int j=1; j<=width; ++j)
-					x|=(s[i-j]=='1')<<(j-1);
+					x|=intType(s[i-j]=='1')<<(j-1);
 				*cur++=x;
 			}
 			if(len%width) {
@@ -138,11 +132,13 @@ public:
 			throw "Not Supported Base!";
 	}
 
-	bigInt(const bigInt& t):n(t.n),m(t.n),sgn(t.sgn) {
-		ptr=new intType[m+1];
+	bigInt& operator=(const bigInt& t) {
+		delete[] ptr;
+		n=t.n;
+		sgn=t.sgn;
+		ptr=new intType[n+1];
 		memcpy(ptr,t.ptr,sizeof(intType)*n);
-		while(n>1&&ptr[n-1]==0) --n;
-		if(n==1&&ptr[0]==0) sgn=0;
+		return (*this);
 	}
 
 	// Deconstruct Function
@@ -180,6 +176,28 @@ template<class intType> bigInt<intType> operator^(const bigInt<intType>& x,const
 		if(i<y.size()) z[i]^=y[i];
 	}
 	return bigInt<intType>(n,1,z);
+}
+
+template<class intType> bigInt<intType> operator+(const bigInt<intType>& x,const bigInt<intType>& y) {
+	static constexpr intType all=~intType(0)>>1;
+	static constexpr int width=bigInt<intType>::width;
+	const int n=std::max(x.size(),y.size())+1;
+	intType *z=new intType[n+1];
+	for(int i=0,addi=0; i<n; ++i) {
+		intType a=i<x.size()?x[i]:0,b=i<y.size()?y[i]:0;
+		z[i]=(a&all)+(b&all)+addi;
+		intType u=a>>(width-1),v=b>>(width-1),w=z[i]>>(width-1);
+		z[i]^=(u^v)<<(width-1);
+		addi=(u&v)|((u|v)&w);
+	}
+	return bigInt<intType>(n,1,z);
+}
+
+template<class intType> std::istream& operator>>(std::istream& in,bigInt<intType>& num) {
+	std::string str;
+	in>>str;
+	num=bigInt<intType>(str.c_str(),str.size(),_DEFAULT_BASE);
+	return in;
 }
 
 template<class intType> std::ostream& operator<<(std::ostream& out,const bigInt<intType>& num) {
