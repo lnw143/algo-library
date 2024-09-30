@@ -11,5 +11,6 @@ int main() {
 	LL a,b;
 	cin>>a>>b;
 	cout<<a+b<<endl;
+	lnw143::bigInt::less_than(a,b);
 	return 0;
 }

@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <string>
 #include <cstdint>
+#include <type_traits>
 
 #ifndef _DEFAULT_BASE
 #define _DEFAULT_BASE BIN
@@ -26,7 +27,7 @@ public:
 	using iterator = intType *;
 	using const_iterator = const intType *;
 	static constexpr int width = sizeof(intType)*__CHAR_BIT__;
-	static_assert(4<=width&&(width&(width-1))==0, "bit width must be 2^x (x>=2)");
+	static_assert(std::is_integral<intType>::value&&4<=width&&(width&(width-1))==0, "bit width must be 2^x (x>=2)");
 
 private:
 	int n,sgn;
@@ -46,6 +47,10 @@ public:
 
 	int size() const {
 		return n;
+	}
+
+	int get_sign() const {
+		return sgn;
 	}
 
 	const intType& operator[](int x) const {
@@ -176,6 +181,43 @@ template<class intType> bigInt<intType> operator^(const bigInt<intType>& x,const
 		if(i<y.size()) z[i]^=y[i];
 	}
 	return bigInt<intType>(n,1,z);
+}
+
+template<class intType> static bool less_than(const bigInt<intType>& x,const bigInt<intType>& y) {
+	if(x.size()!=y.size()) return x.size()<y.size();
+	for(int i=x.size()-1; i>=0; --i)
+		if(x[i]!=y[i])
+			return x[i]<y[i];
+	return false;
+}
+
+template<class intType> bool operator<(const bigInt<intType>& x,const bigInt<intType>& y) {
+	if(x.get_sign()!=y.get_sign()) return x.get_sign()<y.get_sign();
+	return less_than(x,y);
+}
+
+template<class intType> bool operator>(const bigInt<intType>& x,const bigInt<intType>& y) {
+	return y<x;
+}
+
+template<class intType> bool operator<=(const bigInt<intType>& x,const bigInt<intType>& y) {
+	return !(y<x);
+}
+
+template<class intType> bool operator>=(const bigInt<intType>& x,const bigInt<intType>& y) {
+	return !(x<y);
+}
+
+template<class intType> bool operator==(const bigInt<intType>& x,const bigInt<intType>& y) {
+	if(x.size()!=y.size()||x.get_sign()!=y.get_sign()) return false;
+	for(int i=0; i<x.size(); ++i)
+		if(x[i]!=y[i])
+			return false;
+	return true;
+}
+
+template<class intType> bool operator!=(const bigInt<intType>& x,const bigInt<intType>& y) {
+	return !(x==y);
 }
 
 template<class intType> bigInt<intType> operator+(const bigInt<intType>& x,const bigInt<intType>& y) {
