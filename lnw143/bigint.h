@@ -1,11 +1,15 @@
-#ifndef LNW143_BIGINT
-#define LNW143_BIGINT
+#ifndef __LNW143_BIGINT
+#define __LNW143_BIGINT
 
 #include <cstring>
 #include <algorithm>
 #include <string>
 #include <cstdint>
+#include <memory>
 #include <type_traits>
+#include <stdexcept>
+
+#include "poly.h"
 
 #ifndef _DEFAULT_BASE
 #define _DEFAULT_BASE BIN
@@ -20,170 +24,175 @@ enum _Base {
 	HEX = 16,
 };
 
-template<class intType>
+using ll = long long;
+
+template<class int_type>
 class bigInt {
 
 public:
-	using iterator = intType *;
-	using const_iterator = const intType *;
-	static constexpr int width = sizeof(intType)*__CHAR_BIT__;
-	static_assert(std::is_integral<intType>::value&&4<=width&&(width&(width-1))==0, "bit width must be 2^x (x>=2)");
+	using iterator = int_type *;
+	using const_iterator = const int_type *;
+	using based_ptr = std::shared_ptr<int_type[]>;
+	static constexpr int W = sizeof(int_type)*__CHAR_BIT__;
+	static_assert(std::is_integral<int_type>::value&&~int_type(0)>=0, "int_type must be unsigned integer");
+	static_assert(64<=W&&(W&(W-1))==0, "bit width must be 2^x (x>=6)");
 
 private:
-	int n,sgn;
-	iterator ptr;
+	ll n,sgn;
+	based_ptr a;
 
 public:
 
 	// Member Function
 
-	const_iterator begin() const {
-		return ptr;
-	}
-
-	const_iterator end() const {
-		return ptr+n;
-	}
-
-	int size() const {
-		return n;
-	}
-
-	int get_sign() const {
-		return sgn;
-	}
-
-	const intType& operator[](int x) const {
-		return ptr[x];
-	}
+	const_iterator begin() const { return a.get(); }
+	const_iterator end() const { return a.get()+n; }
+	ll size() const { return n; }
+	int get_sign() const { return sgn; }
+	const int_type& operator[](ll x) const { return a[x]; }
+	operator bool() const { return sgn!=0; }
 
 	std::string to_string(_Base base) const {
+		if(sgn==0) return "0";
 		std::string result="";
 		if(sgn==-1) result+='-';
 		if(base==BIN) {
 			for(int i=n-1,exi=0; i>=0; --i)
-				for(int j=width-1; j>=0; --j)
-					if(exi|=(ptr[i]>>j)&1)
-						result+="01"[(ptr[i]>>j)&1];
+				for(int j=W-1; j>=0; --j)
+					if(exi|=(a[i]>>j)&1)
+						result+="01"[(a[i]>>j)&1];
 		} else if(base==OCT) {
 			for(int i=n-1,exi=0; i>=0; --i)
-				for(int j=width-(i*width+width-1)%3-1; j>=0; j-=3) {
-					intType x=(ptr[i]>>j)&1;
-					if(i==n-1) x=(ptr[i]>>j)&7;
+				for(int j=W-(i*W+W-1)%3-1; j>=0; j-=3) {
+					int_type x=(a[i]>>j)&1;
+					if(i==n-1) x=(a[i]>>j)&7;
 					else {
-						if(j<width-1) x|=((ptr[i]>>(j+1))&1)<<1;
-						else x|=((ptr[i+1]>>(j+1-width))&1)<<1;
-						if(j<width-2) x|=((ptr[i]>>(j+2))&1)<<2;
-						else x|=((ptr[i+1]>>(j+2-width))&1)<<2;
+						if(j<W-1) x|=((a[i]>>(j+1))&1)<<1;
+						else x|=((a[i+1]>>(j+1-W))&1)<<1;
+						if(j<W-2) x|=((a[i]>>(j+2))&1)<<2;
+						else x|=((a[i+1]>>(j+2-W))&1)<<2;
 					}
 					if(exi|=x)
 						result+="01234567"[x];
 				}
 		} else if(base==HEX) {
 			for(int i=n-1,exi=0; i>=0; --i)
-				for(int j=width-4; j>=0; j-=4)
-					if(exi|=(ptr[i]>>j)&0xF)
-						result+="0123456789ABCDEF"[(ptr[i]>>j)&0xF];
+				for(int j=W-4; j>=0; j-=4)
+					if(exi|=(a[i]>>j)&0xF)
+						result+="0123456789ABCDEF"[(a[i]>>j)&0xF];
 		} else
 			throw std::invalid_argument("Not Supported Base!");
-		return result.empty()?"0":result;
+		return result;
 	}
 
 	// Construct Function
 
-	bigInt(int n_,int sgn_,iterator ptr_):n(n_),sgn(sgn_),ptr(ptr_) {
-		if(ptr==nullptr) {
+	bigInt(ll n_,ll sgn_,const based_ptr& a_):n(n_),sgn(sgn_),a(a_) {
+		if(!a) {
+			a=based_ptr(new int_type[2]{0,0});
 			n=1;
 			sgn=0;
-			ptr=new intType[2];
-			ptr[0]=0;
 		} else {
-			while(n>1&&ptr[n-1]==0) --n;
-			if(n==1&&ptr[0]==0) sgn=0;
+			while(n>1&&a[n-1]==0) --n;
+			if(n==1&&a[0]==0) sgn=0;
 		}
 	}
 
-	bigInt():n(1),sgn(0) {
-		ptr=new intType[2];
-		ptr[0]=0;
-	}
+	bigInt():n(1),sgn(0),a(based_ptr(new int_type[2]{0,0})) {}
 
-	bigInt(const char *s,int len,_Base base):n(1),sgn(0),ptr(nullptr) {
+	bigInt(const char *s,ll len,_Base base):n(1),sgn(0),a(nullptr) {
 		if(len==0) {
-			ptr=new intType[2];
-			ptr[0]=0;
-		} else if(base==BIN) {
+			a=based_ptr(new int_type[2]{0,0});
+		} else {
 			if(*s=='-') sgn=-1,++s,--len;
 			else {
 				if(*s=='+') ++s,--len;
 				sgn=1;
 			}
-			ptr=new intType[len/width+2];
-			iterator cur=ptr;
-			for(int i=len; i>=width; i-=width) {
-				intType x=0;
-				for(int j=1; j<=width; ++j)
-					x|=intType(s[i-j]=='1')<<(j-1);
-				*cur++=x;
-			}
-			if(len%width) {
-				intType x=0;
-				for(int i=0; i<len%width; ++i)
-					x=(x<<1)|(s[i]=='1');
-				*cur++=x;
-			}
-			n=cur-ptr;
-		} else
-			throw "Not Supported Base!";
-	}
-
-	bigInt& operator=(const bigInt& t) {
-		delete[] ptr;
-		n=t.n;
-		sgn=t.sgn;
-		ptr=new intType[n+1];
-		memcpy(ptr,t.ptr,sizeof(intType)*n);
-		return (*this);
-	}
-
-	// Deconstruct Function
-
-	~bigInt() {
-		delete[] ptr;
+			if(base==BIN) {
+				for(ll i=0; i<len; ++i) if(s[i]!='0'&&s[i]!='1') throw std::invalid_argument("This is not binary string!");
+				a=based_ptr(new int_type[len/W+2]);
+				iterator t=a.get();
+				for(ll i=len; i>=W; i-=W) {
+					int_type x=0;
+					for(ll j=W; j>=1; --j)
+						x=(x<<1)|(s[i-j]&1);
+					*t++=x;
+				}
+				if(len%W) {
+					int_type x=0;
+					for(ll i=0; i<len%W; ++i)
+						x=(x<<1)|(s[i]&1);
+					*t++=x;
+				}
+				n=t-a.get();
+			} else if(base==HEX) {
+				static constexpr ll S = W / 4;
+				for(ll i=0; i<len; ++i)
+					if(!('0'<=s[i]&&s[i]<='9')&&!('A'<=s[i]&&s[i]<='F')&&!('a'<=s[i]&&s[i]<='f'))
+						throw std::invalid_argument("This is not hexadecimal string!");
+				a=based_ptr(new int_type[len/S+2]);
+				int_type *t=a.get();
+				for(ll i=len; i>=S; i-=S) {
+					int_type x=0;
+					for(ll j=S; j>=1; --j)
+						if(isdigit(s[i-j]))
+							x=(x<<4)|(s[i-j]&15);
+						else if(isupper(s[i-j]))
+							x=(x<<4)|(s[i-j]-'A'+10);
+						else
+							x=(x<<4)|(s[i-j]-'a'+10);
+					*t++=x;
+				}
+				if(len%S) {
+					int_type x=0;
+					for(ll i=0; i<len%S; ++i)
+						if(isdigit(s[i]))
+							x=(x<<4)|(s[i]&15);
+						else if(isupper(s[i]))
+							x=(x<<4)|(s[i]-'A'+10);
+						else
+							x=(x<<4)|(s[i]-'a'+10);
+					*t++=x;
+				}
+				n=t-a.get();
+			} else
+				throw std::invalid_argument("Not Supported Base!");
+		}
 	}
 
 };
 
-template<class intType> bigInt<intType> operator&(const bigInt<intType>& x,const bigInt<intType>& y) {
-	const int n=std::min(x.size(),y.size());
-	intType *z=new intType[n+1];
+template<class int_type> bigInt<int_type> operator&(const bigInt<int_type>& x,const bigInt<int_type>& y) {
+	const ll n=std::min(x.size(),y.size());
+	typename bigInt<int_type>::based_ptr z(new int_type[n+1]);
 	for(int i=0; i<n; ++i) z[i]=x[i]&y[i];
-	return bigInt<intType>(n,1,z);
+	return bigInt<int_type>(n,x.get_sign()*y.get_sign(),z);
 }
 
-template<class intType> bigInt<intType> operator|(const bigInt<intType>& x,const bigInt<intType>& y) {
-	const int n=std::max(x.size(),y.size());
-	intType *z=new intType[n+1];
+template<class int_type> bigInt<int_type> operator|(const bigInt<int_type>& x,const bigInt<int_type>& y) {
+	const ll n=std::max(x.size(),y.size());
+	typename bigInt<int_type>::based_ptr z(new int_type[n+1]);
 	for(int i=0; i<n; ++i) {
 		z[i]=0;
 		if(i<x.size()) z[i]|=x[i];
 		if(i<y.size()) z[i]|=y[i];
 	}
-	return bigInt<intType>(n,1,z);
+	return bigInt<int_type>(n,x.get_sign()*y.get_sign(),z);
 }
 
-template<class intType> bigInt<intType> operator^(const bigInt<intType>& x,const bigInt<intType>& y) {
-	const int n=std::max(x.size(),y.size());
-	intType *z=new intType[n+1];
+template<class int_type> bigInt<int_type> operator^(const bigInt<int_type>& x,const bigInt<int_type>& y) {
+	const ll n=std::max(x.size(),y.size());
+	typename bigInt<int_type>::based_ptr z(new int_type[n+1]);
 	for(int i=0; i<n; ++i) {
 		z[i]=0;
 		if(i<x.size()) z[i]^=x[i];
 		if(i<y.size()) z[i]^=y[i];
 	}
-	return bigInt<intType>(n,1,z);
+	return bigInt<int_type>(n,x.get_sign()*y.get_sign(),z);
 }
 
-template<class intType> static bool less_than(const bigInt<intType>& x,const bigInt<intType>& y) {
+template<class int_type> static bool _Less_than(const bigInt<int_type>& x,const bigInt<int_type>& y) {
 	if(x.size()!=y.size()) return x.size()<y.size();
 	for(int i=x.size()-1; i>=0; --i)
 		if(x[i]!=y[i])
@@ -191,24 +200,24 @@ template<class intType> static bool less_than(const bigInt<intType>& x,const big
 	return false;
 }
 
-template<class intType> bool operator<(const bigInt<intType>& x,const bigInt<intType>& y) {
+template<class int_type> bool operator<(const bigInt<int_type>& x,const bigInt<int_type>& y) {
 	if(x.get_sign()!=y.get_sign()) return x.get_sign()<y.get_sign();
-	return less_than(x,y);
+	return _Less_than(x,y);
 }
 
-template<class intType> bool operator>(const bigInt<intType>& x,const bigInt<intType>& y) {
+template<class int_type> bool operator>(const bigInt<int_type>& x,const bigInt<int_type>& y) {
 	return y<x;
 }
 
-template<class intType> bool operator<=(const bigInt<intType>& x,const bigInt<intType>& y) {
+template<class int_type> bool operator<=(const bigInt<int_type>& x,const bigInt<int_type>& y) {
 	return !(y<x);
 }
 
-template<class intType> bool operator>=(const bigInt<intType>& x,const bigInt<intType>& y) {
+template<class int_type> bool operator>=(const bigInt<int_type>& x,const bigInt<int_type>& y) {
 	return !(x<y);
 }
 
-template<class intType> bool operator==(const bigInt<intType>& x,const bigInt<intType>& y) {
+template<class int_type> bool operator==(const bigInt<int_type>& x,const bigInt<int_type>& y) {
 	if(x.size()!=y.size()||x.get_sign()!=y.get_sign()) return false;
 	for(int i=0; i<x.size(); ++i)
 		if(x[i]!=y[i])
@@ -216,33 +225,71 @@ template<class intType> bool operator==(const bigInt<intType>& x,const bigInt<in
 	return true;
 }
 
-template<class intType> bool operator!=(const bigInt<intType>& x,const bigInt<intType>& y) {
+template<class int_type> bool operator!=(const bigInt<int_type>& x,const bigInt<int_type>& y) {
 	return !(x==y);
 }
 
-template<class intType> bigInt<intType> operator+(const bigInt<intType>& x,const bigInt<intType>& y) {
-	static constexpr intType all=~intType(0)>>1;
-	static constexpr int width=bigInt<intType>::width;
-	const int n=std::max(x.size(),y.size())+1;
-	intType *z=new intType[n+1];
+template<class int_type> bigInt<int_type> operator+(const bigInt<int_type>& x,const bigInt<int_type>& y) {
+	static constexpr int_type all=~int_type(0)>>1;
+	static constexpr int W=bigInt<int_type>::W;
+	const ll n=std::max(x.size(),y.size())+1;
+	typename bigInt<int_type>::based_ptr z(new int_type[n+1]);
 	for(int i=0,addi=0; i<n; ++i) {
-		intType a=i<x.size()?x[i]:0,b=i<y.size()?y[i]:0;
+		int_type a=i<x.size()?x[i]:0,b=i<y.size()?y[i]:0;
 		z[i]=(a&all)+(b&all)+addi;
-		intType u=a>>(width-1),v=b>>(width-1),w=z[i]>>(width-1);
-		z[i]^=(u^v)<<(width-1);
+		int_type u=a>>(W-1),v=b>>(W-1),w=z[i]>>(W-1);
+		z[i]^=(u^v)<<(W-1);
 		addi=(u&v)|((u|v)&w);
 	}
-	return bigInt<intType>(n,1,z);
+	return bigInt<int_type>(n,1,z);
 }
 
-template<class intType> std::istream& operator>>(std::istream& in,bigInt<intType>& num) {
+template<class int_type> bigInt<int_type> operator*(const bigInt<int_type>& x,const bigInt<int_type>& y) {
+	static constexpr int W=bigInt<int_type>::W;
+	static constexpr ll P = 998244353, G = 3, G_inv = 332748118;
+	static constexpr ll S = W / 4;
+	static_assert(G*G_inv%P==1);
+	ll n=1;
+	while(n<=x.size()+y.size()) n<<=1;
+	n*=S;
+	ll *a=new ll[n],*b=new ll[n];
+	memset(a,0,sizeof(ll)*n);
+	memset(b,0,sizeof(ll)*n);
+	for(ll i=0; i<x.size(); ++i)
+		for(ll j=0; j<W; j+=4)
+			a[(i*W+j)>>2]=(x[i]>>j)&0xF;
+	for(ll i=0; i<y.size(); ++i)
+		for(ll j=0; j<W; j+=4)
+			b[(i*W+j)>>2]=(y[i]>>j)&0xF;
+	poly::NTT<1>(n,a,G,P);
+	poly::NTT<1>(n,b,G,P);
+	for(ll i=0; i<n; ++i) a[i]=a[i]*b[i]%P;
+	poly::NTT<-1>(n,a,G_inv,P);
+	ll addi=0;
+	for(ll i=0; i<n; ++i) {
+		addi+=a[i];
+		a[i]=addi&0xF;
+		addi>>=4;
+	}
+	typename bigInt<int_type>::based_ptr z(new int_type[n/S+2]);
+	for(ll i=0; i<n/S; ++i) {
+		z[i]=0;
+		for(ll j=0; j<S; ++j)
+			z[i]|=a[i*S+j]<<(j*4);
+	}
+	delete[] a;
+	delete[] b;
+	return bigInt<int_type>(n/S,x.get_sign()*y.get_sign(),z);
+}
+
+template<class int_type> std::istream& operator>>(std::istream& in,bigInt<int_type>& num) {
 	std::string str;
 	in>>str;
-	num=bigInt<intType>(str.c_str(),str.size(),_DEFAULT_BASE);
+	num=bigInt<int_type>(str.c_str(),str.size(),_DEFAULT_BASE);
 	return in;
 }
 
-template<class intType> std::ostream& operator<<(std::ostream& out,const bigInt<intType>& num) {
+template<class int_type> std::ostream& operator<<(std::ostream& out,const bigInt<int_type>& num) {
 	out<<num.to_string(_DEFAULT_BASE);
 	return out;
 }
