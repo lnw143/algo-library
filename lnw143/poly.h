@@ -9,28 +9,38 @@ namespace lnw143::poly {
 
 using ll = long long;
 
-template<int type,class int_type> void NTT(ll n,int_type *a,const int_type& G,const int_type& P) {
+template<ll type,ll G,ll P> void NTT(ll n,ll *a) {
 	static_assert(type==1||type==-1);
+	static_assert(0<=G&&G<P);
+	static ll omg_n[30],inv_n[30];
+	if(omg_n[0]==0) {
+		ll k=0,e=P-1;
+		while((e&1)==0) e>>=1,++k;
+		omg_n[k]=basic::mpow(G,e,P);
+		for(ll i=k-1; i>=0; --i) omg_n[i]=omg_n[i+1]*omg_n[i+1]%P;
+		inv_n[0]=1;
+		inv_n[1]=basic::mpow(2ll,P-2,P);
+		for(ll i=2; i<30; ++i) inv_n[i]=inv_n[i-1]*inv_n[1]%P;
+	}
 	if(n&(n-1)) throw std::invalid_argument("N is not a power of 2!");
 	ll m=0;
 	while((1<<m)<n) ++m;
 	ll *r=new ll[n];
 	memset(r,0,sizeof(ll)*n);
-	for(int i=0; i<n; ++i) r[i]=(r[i>>1]>>1)|((i&1)<<(m-1));
-	for(int i=0; i<n; ++i) if(i<r[i]) std::swap(a[i],a[r[i]]);
+	for(ll i=0; i<n; ++i) r[i]=(r[i>>1]>>1)|((i&1)<<(m-1));
+	for(ll i=0; i<n; ++i) if(i<r[i]) std::swap(a[i],a[r[i]]);
 	delete[] r;
-	for(int i=1; i<n; i<<=1) {
-		const int_type omgn = basic::mpow(G,(P-1)/(i<<1),P);
-		for(int j=0; j<n; j+=i<<1) {
-			int_type omg=1;
-			for(int k=0; k<i; ++k,(omg*=omgn)%=P) {
-				const int_type u=a[j+k],v=a[j+k+i]*omg%P;
-				a[j+k]=(u+v)%P;
-				a[j+k+i]=(u-v+P)%P;
+	for(ll i=1,p=1; i<n; i<<=1,++p)
+		for(ll j=0; j<n; j+=i<<1) {
+			ll omg=1;
+			for(ll k=0; k<i; ++k,(omg*=omg_n[p])%=P) {
+				const ll u=a[j|k],v=a[j|k|i]*omg%P;
+				a[j|k]=u+v;
+				if(a[j|k]>=P) a[j|k]-=P;
+				a[j|k|i]=u<v?u-v+P:u-v;
 			}
 		}
-	}
-	if(type==-1) for(int i=0; i<n; ++i) (a[i]*=basic::mpow(int_type(n),P-2,P))%=P;
+	if(type==-1) for(ll i=0; i<n; ++i) (a[i]*=inv_n[m])%=P;
 }
 
 }
