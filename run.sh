@@ -5,6 +5,6 @@ echo running python
 time python -u checker.py < .in > .ans
 echo running c++
 time ./tester < .in > .out
-diff .out .ans
+diff .out .ans -w
 if (($?!=0)); then break; fi
 done
