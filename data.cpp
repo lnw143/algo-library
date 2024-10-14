@@ -90,15 +90,17 @@ int main() {
 	return 0;
 }
 
-const int N = 1e5;
+const int N = 1e6;
+
+const char *HEX = "0123456789ABCDEF";
 
 void _main() {
-	putchar('1');
-	fo(i,1,N) putchar("01"[randint(0,1)]);
-	putchar('\n');
-	putchar('1');
-	fo(i,1,N) putchar("01"[randint(0,1)]);
-	putchar('\n');
+	fo(j,1,2) {
+		if(randint(0,1)) putchar('-');
+		putchar(HEX[randint(1,15)]);
+		fo(i,1,N) putchar(HEX[randint(0,15)]);
+		putchar('\n');
+	}
 }
 
 void _init() {

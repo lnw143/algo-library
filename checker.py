@@ -1,4 +1,4 @@
-x = int(input(),2)
-y = int(input(),2)
+x = int(input(),16)
+y = int(input(),16)
 
-print(format(x+y,'b'))
+print('{:X}'.format(x*y))
